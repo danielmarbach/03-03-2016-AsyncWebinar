@@ -26,7 +26,7 @@ namespace AsyncDolls
 
                     #endregion
 
-                    await HandleMessage();
+                    await HandleMessage().ConfigureAwait(false);
                 }
             });
 
@@ -62,18 +62,7 @@ namespace AsyncDolls
             await pumpTask.Unwrap();
         }
 
-        /*
-        protected internal override void QueueTask(Task task)
-        {
-            if ((task.Options & TaskCreationOptions.LongRunning) != 0)
-            {
-                // Run LongRunning tasks on their own dedicated thread.
-                Thread thread = new Thread(s_longRunningThreadWork);
-                thread.IsBackground = true; // Keep this thread from blocking process shutdown
-                thread.Start(task);
-            }
-        }
-        */
+        // http://referencesource.microsoft.com/#mscorlib/system/threading/Tasks/ThreadPoolTaskScheduler.cs,57
 
         [Test]
         public async Task ConcurrentlyHandleMessages()
@@ -388,7 +377,7 @@ namespace AsyncDolls
             await pumpTask.IgnoreCancellation();
             await Task.WhenAll(runningTasks.Values);
 
-            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Troughput {numberOfTasks/10} msgs/s".Output();
+            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks/10} msgs/s".Output();
         }
 
         [Test]
@@ -429,7 +418,7 @@ namespace AsyncDolls
             await pumpTask.IgnoreCancellation();
             await Task.WhenAll(runningTasks.Values);
 
-            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Troughput {numberOfTasks / 10} msgs/s".Output();
+            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks / 10} msgs/s".Output();
         }
 
         private static Task BlockingHandleMessage()
