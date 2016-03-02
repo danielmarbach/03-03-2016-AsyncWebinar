@@ -1,11 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Threading;
 using NUnit.Framework;
 
 namespace AsyncDolls
@@ -19,7 +15,6 @@ namespace AsyncDolls
             var tokenSource = new CancellationTokenSource();
             tokenSource.CancelAfter(TimeSpan.FromSeconds(1));
             var token = tokenSource.Token;
-
 
             var pumpTask = Task.Run(async () =>
             {
@@ -135,7 +130,7 @@ namespace AsyncDolls
         }
 
         [Test]
-        public async Task LimittingConcurrency()
+        public async Task LimitingConcurrency()
         {
             #region Cancellation AsAbove
             var tokenSource = new CancellationTokenSource();
@@ -222,7 +217,7 @@ namespace AsyncDolls
             #region Task Tracking
             var runningTasks = new ConcurrentDictionary<Task, Task>();
             #endregion
-            #region Limitting
+            #region Limiting AsAbove
 
             var semaphore = new SemaphoreSlim(2);
 
