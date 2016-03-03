@@ -75,9 +75,11 @@ namespace AsyncDolls
         public async Task ConcurrentlyHandleMessages()
         {
             #region Cancellation AsAbove
+
             var tokenSource = new CancellationTokenSource();
             tokenSource.CancelAfter(TimeSpan.FromSeconds(1));
             var token = tokenSource.Token;
+
             #endregion
 
             var runningTasks = new ConcurrentDictionary<Task, Task>();
@@ -111,17 +113,21 @@ namespace AsyncDolls
             });
 
             await pumpTask.ConfigureAwait(false);
+
             #region Output
 
             "Pump finished".Output();
 
             #endregion
+
             await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
+
             #region Output
 
             "All receives finished".Output();
 
             #endregion
+
             tokenSource.Dispose();
         }
 
@@ -129,12 +135,17 @@ namespace AsyncDolls
         public async Task LimitingConcurrency()
         {
             #region Cancellation AsAbove
+
             var tokenSource = new CancellationTokenSource();
             tokenSource.CancelAfter(TimeSpan.FromSeconds(1));
             var token = tokenSource.Token;
+
             #endregion
+
             #region Task Tracking AsAbove
+
             var runningTasks = new ConcurrentDictionary<Task, Task>();
+
             #endregion
 
             var semaphore = new SemaphoreSlim(2);
@@ -177,7 +188,7 @@ namespace AsyncDolls
                         #endregion
 
                     }, TaskContinuationOptions.ExecuteSynchronously)
-                    .Ignore();
+                        .Ignore();
                 }
             });
 
@@ -209,13 +220,19 @@ namespace AsyncDolls
         public async Task CancellingAndGracefulShutdown()
         {
             #region Cancellation AsAbove
+
             var tokenSource = new CancellationTokenSource();
             tokenSource.CancelAfter(TimeSpan.FromSeconds(1));
             var token = tokenSource.Token;
+
             #endregion
+
             #region Task Tracking AsAbove
+
             var runningTasks = new ConcurrentDictionary<Task, Task>();
+
             #endregion
+
             #region Limiting AsAbove
 
             var semaphore = new SemaphoreSlim(2);
@@ -278,7 +295,7 @@ namespace AsyncDolls
 
             #endregion
 
-            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
+            await Task.WhenAll(runningTasks.Values).IgnoreCancellation().ConfigureAwait(false);
 
             #region Output
 
@@ -302,7 +319,7 @@ namespace AsyncDolls
         {
             var runningTasks = new ConcurrentDictionary<Task, Task>();
             var semaphore = new SemaphoreSlim(100);
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var token = tokenSource.Token;
             int numberOfTasks = 0;
 
@@ -323,7 +340,7 @@ namespace AsyncDolls
                         Task taskToBeRemoved;
                         runningTasks.TryRemove(t, out taskToBeRemoved);
                     }, TaskContinuationOptions.ExecuteSynchronously)
-                    .Ignore();
+                        .Ignore();
                 }
             });
 
@@ -332,7 +349,8 @@ namespace AsyncDolls
             tokenSource.Dispose();
             semaphore.Dispose();
 
-            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks/10} msgs/s".Output();
+            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 5 seconds. Throughput {numberOfTasks/5} msgs/s"
+                .Output();
         }
 
         [Test]
@@ -340,7 +358,7 @@ namespace AsyncDolls
         {
             var runningTasks = new ConcurrentDictionary<Task, Task>();
             var semaphore = new SemaphoreSlim(100);
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var token = tokenSource.Token;
             int numberOfTasks = 0;
 
@@ -366,7 +384,7 @@ namespace AsyncDolls
                         Task taskToBeRemoved;
                         runningTasks.TryRemove(t, out taskToBeRemoved);
                     }, TaskContinuationOptions.ExecuteSynchronously)
-                    .Ignore();
+                        .Ignore();
                 }
             });
 
@@ -374,7 +392,8 @@ namespace AsyncDolls
             await Task.WhenAll(runningTasks.Values).IgnoreCancellation().ConfigureAwait(false);
             tokenSource.Dispose();
 
-            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks / 10} msgs/s".Output();
+            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 5 seconds. Throughput {numberOfTasks/5} msgs/s"
+                .Output();
         }
 
         private static Task BlockingHandleMessage(CancellationToken cancellationToken = default(CancellationToken))
@@ -386,6 +405,69 @@ namespace AsyncDolls
 
             Thread.Sleep(1000);
             return Task.CompletedTask;
+        }
+
+        [Test]
+        public async Task LimitingThreads()
+        {
+            var runningTasks = new ConcurrentDictionary<Task, Task>();
+            var semaphore = new SemaphoreSlim(1);
+            var scheduler = new LimitedConcurrencyLevelTaskScheduler(1);
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var token = tokenSource.Token;
+            int numberOfTasks = 0;
+
+            var pumpTask = Task.Run(async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    await semaphore.WaitAsync(token).ConfigureAwait(false);
+
+                    var runningTask = Task.Factory.StartNew(() =>
+                    {
+                        Interlocked.Increment(ref numberOfTasks);
+
+                        return HandleMessageUnderSpecialScheduler(token);
+                    }, CancellationToken.None, TaskCreationOptions.HideScheduler, scheduler)
+                    .Unwrap();
+
+                    runningTasks.TryAdd(runningTask, runningTask);
+
+                    runningTask.ContinueWith(t =>
+                    {
+                        semaphore.Release();
+
+                        Task taskToBeRemoved;
+                        runningTasks.TryRemove(t, out taskToBeRemoved);
+                    }, TaskContinuationOptions.ExecuteSynchronously)
+                    .Ignore();
+                }
+            });
+
+            await pumpTask.IgnoreCancellation().ConfigureAwait(false);
+            await Task.WhenAll(runningTasks.Values).IgnoreCancellation().ConfigureAwait(false);
+            tokenSource.Dispose();
+
+            $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 5 seconds. Throughput {numberOfTasks / 5} msgs/s".Output();
+        }
+
+        static async Task HandleMessageUnderSpecialScheduler(CancellationToken cancellationToken = default(CancellationToken))
+        {
+            var limitingScheduler = TaskScheduler.Current as LimitedConcurrencyLevelTaskScheduler;
+            if (limitingScheduler != null)
+            {
+                "Limiting Scheduler".Output();
+            }
+
+            await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+            await Task.Factory.StartNew(() =>
+            {
+                var scheduler = TaskScheduler.Current as LimitedConcurrencyLevelTaskScheduler;
+                if (scheduler != null)
+                {
+                    "Even here Limiting Scheduler".Output();
+                }
+            }).ConfigureAwait(false);
         }
     }
 }

@@ -20,7 +20,7 @@ The font used in the slides is
 ## CaveatsOfTaskFactoryStartNew
 
 * The message pump itself can be running for multiple minutes, hours even days before we shutdown the system. So the pump itself is a long running operation. The Task Parallel Library offers ways to hint the TPL about the operations that are running inside the task body. These hints can be passed into the more advanced API under `Task.Factory.StartNew`. For example there is a creation flag called `LongRunning`.
-* The impact on the `LongRunning` flag is that the current TaskScheduler will [create a new background task](http://referencesource.microsoft.com/#mscorlib/system/threading/Tasks/ThreadPoolTaskScheduler.cs,57) and assign that background task as the worker thread for the scheduled task. In the last webinar we talked about that every `await` statement is an opportunity for the worker thread to step out and do other things. When the body reaches the first await statement the newly created Thread will run to completion including all the associated resources like Stack, Memory etc.. So that means long running is a complete was for Tasks representing IO-bound work. Similar applies for the `AttachedToParent` creation options which I wont't cover in detail here.
+* The impact on the `LongRunning` flag is that the current TaskScheduler will [create a new background thread](http://referencesource.microsoft.com/#mscorlib/system/threading/Tasks/ThreadPoolTaskScheduler.cs,57) and assign that background task as the worker thread for the scheduled task. In the last webinar we talked about that every `await` statement is an opportunity for the worker thread to step out and do other things. When the body reaches the first await statement the newly created Thread will run to completion including all the associated resources like Stack, Memory etc.. So that means long running is a complete was for Tasks representing IO-bound work. Similar applies for the `AttachedToParent` creation options which I wont't cover in detail here.
 * Another caveat is that if you declare a method `async` as the body of `StartNew` then this method returns a proxy Task (as `Task<Task>`). When you await the proxy, it will be completed eventhough the inner body is not yet completed. In order to await the inner body you have to `Unwrap` the proxy.
 * This example shows that we should prefer `Task.Run` over `Factory.StartNew` unless we really know what we are doing.
 
@@ -42,11 +42,9 @@ Since we now have an operation which is awaited inside the body of the task we n
 
 The previous code would actually asynchronously capture operations up to the number of slots available on the semaphore on the `WaitAsync` method. Therefore if we shutdown our message pump the pumpTask would "hang" potentially indefinitely. Well designed async API usually provide overloads which allow to pass in a CancellationToken. They will observe the cancellation token and throw an OperationCancelledException when the token is cancelled.
 
+We could also pass the token into the Task.Run method. But passing the token into the Task.Run does't not mean the operation inside the task is automatically cancelled. It just means that no matter whether the body of the task throws or not the task will transition into the cancelled state when the token is cancelled.
+
 Depending on the design we want to achieve we could also support cancellation inside the handle message method by floating the token into the handle method `HandleMessageWithCancellation`. By the way CancellationToken and TokenSources allow to build complex hierarchies of linked sources and tokens if we wan't to get fancy but I will not cover this here.
-
-## TheCompletePumpWithAsyncHandleMessage
-
-
 
 # Links
 ## About me
