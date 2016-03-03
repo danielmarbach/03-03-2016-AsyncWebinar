@@ -31,6 +31,8 @@ namespace AsyncDolls
             });
 
             await pumpTask;
+
+            tokenSource.Dispose();
         }
 
         static Task HandleMessage()
@@ -60,6 +62,8 @@ namespace AsyncDolls
             }, TaskCreationOptions.LongRunning);
 
             await pumpTask.Unwrap();
+
+            tokenSource.Dispose();
         }
 
         // http://referencesource.microsoft.com/#mscorlib/system/threading/Tasks/ThreadPoolTaskScheduler.cs,57
@@ -99,8 +103,7 @@ namespace AsyncDolls
 
                         Task taskToBeRemoved;
                         runningTasks.TryRemove(t, out taskToBeRemoved);
-                    }, TaskContinuationOptions.ExecuteSynchronously)
-                    .Ignore();
+                    }, TaskContinuationOptions.ExecuteSynchronously);
                 }
             });
 
@@ -116,6 +119,7 @@ namespace AsyncDolls
             "All receives finished".Output();
 
             #endregion
+            tokenSource.Dispose();
         }
 
         [Test]
@@ -174,7 +178,7 @@ namespace AsyncDolls
                 }
             });
 
-            #region Awaiting completion
+            #region Awaiting completion AsAbove
 
             await pumpTask;
 
@@ -192,18 +196,20 @@ namespace AsyncDolls
 
             #endregion
 
+            tokenSource.Dispose();
+
             #endregion
         }
 
         [Test]
         public async Task CancellingAndGracefulShutdown()
         {
-            #region Cancellation
+            #region Cancellation AsAbove
             var tokenSource = new CancellationTokenSource();
             tokenSource.CancelAfter(TimeSpan.FromSeconds(1));
             var token = tokenSource.Token;
             #endregion
-            #region Task Tracking
+            #region Task Tracking AsAbove
             var runningTasks = new ConcurrentDictionary<Task, Task>();
             #endregion
             #region Limiting AsAbove
@@ -224,7 +230,7 @@ namespace AsyncDolls
 
                     await semaphore.WaitAsync(token).ConfigureAwait(false);
 
-                    #region HandleMessage
+                    #region HandleMessage AsAbove
 
                     var runningTask = HandleMessage();
 
@@ -232,7 +238,7 @@ namespace AsyncDolls
 
                     #endregion
 
-                    #region Releasing Semaphore & Housekeeping
+                    #region Releasing Semaphore & Housekeeping AsAbove
 
                     runningTask.ContinueWith(t =>
                     {
@@ -276,72 +282,9 @@ namespace AsyncDolls
 
             #endregion
 
-            #endregion
-        }
-
-        [Test]
-        public async Task CancellingTheTask()
-        {
-            var tokenSource = new CancellationTokenSource();
-            tokenSource.Cancel();
-            var token = tokenSource.Token;
-
-            var cancelledTask = Task.Run(
-
-                () => { }
-                
-                , token);
-
-            #region Output
-            cancelledTask.Status.ToString().Output();
-            #endregion
-            try
-            {
-                await cancelledTask;
-            }
-            catch (OperationCanceledException)
-            {
-                #region Output
-
-                "Throws when awaited".Output();
-                cancelledTask.Status.ToString().Output();
-
-                #endregion
-            }
-        }
-
-        [Test]
-        public async Task CancelllingTheOperationInsideTheTask()
-        {
-            var tokenSource = new CancellationTokenSource();
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-            var token = tokenSource.Token;
-
-            var cancelledTask = Task.Run(
-
-                () => Task.Delay(TimeSpan.FromMinutes(10), token)
-
-                , token);
-
-            #region Output
-
-            cancelledTask.Status.ToString().Output();
+            tokenSource.Dispose();
 
             #endregion
-            try
-            {
-                await cancelledTask;
-            }
-            catch (OperationCanceledException)
-            {
-                #region Output
-
-                "Throws when awaited".Output();
-                cancelledTask.Status.ToString().Output();
-
-                #endregion
-
-            }
         }
 
         [Test]
@@ -376,6 +319,7 @@ namespace AsyncDolls
 
             await pumpTask.IgnoreCancellation();
             await Task.WhenAll(runningTasks.Values);
+            tokenSource.Dispose();
 
             $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks/10} msgs/s".Output();
         }
@@ -417,6 +361,7 @@ namespace AsyncDolls
 
             await pumpTask.IgnoreCancellation();
             await Task.WhenAll(runningTasks.Values);
+            tokenSource.Dispose();
 
             $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks / 10} msgs/s".Output();
         }
