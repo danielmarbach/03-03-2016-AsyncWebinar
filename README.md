@@ -42,7 +42,11 @@ Since we now have an operation which is awaited inside the body of the task we n
 
 The previous code would actually asynchronously capture operations up to the number of slots available on the semaphore on the `WaitAsync` method. Therefore if we shutdown our message pump the pumpTask would "hang" potentially indefinitely. Well designed async API usually provide overloads which allow to pass in a CancellationToken. They will observe the cancellation token and throw an OperationCancelledException when the token is cancelled.
 
-Depending on the design we want to achieve we could also support cancellation inside the handle message method by floating the token into the handle method `HandleMessageWithCancellation`. By the way CancellationToken and TokenSources allow to build complex hiearchies of linked sources and tokens if we wan't to get fancy but I will not cover this here.
+Depending on the design we want to achieve we could also support cancellation inside the handle message method by floating the token into the handle method `HandleMessageWithCancellation`. By the way CancellationToken and TokenSources allow to build complex hierarchies of linked sources and tokens if we wan't to get fancy but I will not cover this here.
+
+## TheCompletePumpWithAsyncHandleMessage
+
+
 
 # Links
 ## About me

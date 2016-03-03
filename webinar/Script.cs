@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -312,7 +313,7 @@ namespace AsyncDolls
                     await semaphore.WaitAsync(token).ConfigureAwait(false);
                     Interlocked.Increment(ref numberOfTasks);
 
-                    var task = HandleMessage();
+                    var task = HandleMessageWithCancellation(token);
 
                     runningTasks.TryAdd(task, task);
 
@@ -327,7 +328,7 @@ namespace AsyncDolls
             });
 
             await pumpTask.IgnoreCancellation().ConfigureAwait(false);
-            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
+            await Task.WhenAll(runningTasks.Values).IgnoreCancellation().ConfigureAwait(false);
             tokenSource.Dispose();
             semaphore.Dispose();
 
@@ -370,14 +371,19 @@ namespace AsyncDolls
             });
 
             await pumpTask.IgnoreCancellation().ConfigureAwait(false);
-            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
+            await Task.WhenAll(runningTasks.Values).IgnoreCancellation().ConfigureAwait(false);
             tokenSource.Dispose();
 
             $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks / 10} msgs/s".Output();
         }
 
-        private static Task BlockingHandleMessage()
+        private static Task BlockingHandleMessage(CancellationToken cancellationToken = default(CancellationToken))
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromCanceled(cancellationToken);
+            }
+
             Thread.Sleep(1000);
             return Task.CompletedTask;
         }
