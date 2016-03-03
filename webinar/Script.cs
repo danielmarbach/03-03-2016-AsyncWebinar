@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
+// ReSharper disable AccessToDisposedClosure
+// ReSharper disable MethodSupportsCancellation
 
 namespace AsyncDolls
 {
@@ -30,7 +32,7 @@ namespace AsyncDolls
                 }
             });
 
-            await pumpTask;
+            await pumpTask.ConfigureAwait(false);
 
             tokenSource.Dispose();
         }
@@ -61,7 +63,7 @@ namespace AsyncDolls
                 }
             }, TaskCreationOptions.LongRunning);
 
-            await pumpTask.Unwrap();
+            await pumpTask.Unwrap().ConfigureAwait(false);
 
             tokenSource.Dispose();
         }
@@ -107,13 +109,13 @@ namespace AsyncDolls
                 }
             });
 
-            await pumpTask;
+            await pumpTask.ConfigureAwait(false);
             #region Output
 
             "Pump finished".Output();
 
             #endregion
-            await Task.WhenAll(runningTasks.Values);
+            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
             #region Output
 
             "All receives finished".Output();
@@ -180,7 +182,7 @@ namespace AsyncDolls
 
             #region Awaiting completion AsAbove
 
-            await pumpTask;
+            await pumpTask.ConfigureAwait(false);
 
             #region Output
 
@@ -188,7 +190,7 @@ namespace AsyncDolls
 
             #endregion
 
-            await Task.WhenAll(runningTasks.Values);
+            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
 
             #region Output
 
@@ -197,6 +199,7 @@ namespace AsyncDolls
             #endregion
 
             tokenSource.Dispose();
+            semaphore.Dispose();
 
             #endregion
         }
@@ -232,7 +235,7 @@ namespace AsyncDolls
 
                     #region HandleMessage AsAbove
 
-                    var runningTask = HandleMessage();
+                    var runningTask = HandleMessageWithCancellation();
 
                     runningTasks.TryAdd(runningTask, runningTask);
 
@@ -264,7 +267,7 @@ namespace AsyncDolls
                 }
             }, CancellationToken.None);
 
-            await pumpTask.IgnoreCancellation();
+            await pumpTask.IgnoreCancellation().ConfigureAwait(false);
 
             #region Awaiting completion
 
@@ -274,7 +277,7 @@ namespace AsyncDolls
 
             #endregion
 
-            await Task.WhenAll(runningTasks.Values);
+            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
 
             #region Output
 
@@ -283,8 +286,14 @@ namespace AsyncDolls
             #endregion
 
             tokenSource.Dispose();
+            semaphore.Dispose();
 
             #endregion
+        }
+
+        static Task HandleMessageWithCancellation(CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return Task.Delay(1000, cancellationToken);
         }
 
         [Test]
@@ -317,9 +326,10 @@ namespace AsyncDolls
                 }
             });
 
-            await pumpTask.IgnoreCancellation();
-            await Task.WhenAll(runningTasks.Values);
+            await pumpTask.IgnoreCancellation().ConfigureAwait(false);
+            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
             tokenSource.Dispose();
+            semaphore.Dispose();
 
             $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks/10} msgs/s".Output();
         }
@@ -359,8 +369,8 @@ namespace AsyncDolls
                 }
             });
 
-            await pumpTask.IgnoreCancellation();
-            await Task.WhenAll(runningTasks.Values);
+            await pumpTask.IgnoreCancellation().ConfigureAwait(false);
+            await Task.WhenAll(runningTasks.Values).ConfigureAwait(false);
             tokenSource.Dispose();
 
             $"Consumed {numberOfTasks} messages with concurrency {semaphore.CurrentCount} in 10 seconds. Throughput {numberOfTasks / 10} msgs/s".Output();
@@ -370,32 +380,6 @@ namespace AsyncDolls
         {
             Thread.Sleep(1000);
             return Task.CompletedTask;
-        }
-    }
-
-    static class TaskExtensions
-    {
-        public static void Ignore(this Task task)
-        {
-        }
-
-        public static async Task IgnoreCancellation(this Task task)
-        {
-            try
-            {
-                await task.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        }
-    }
-
-    static class StringExtensions
-    {
-        public static void Output(this string value)
-        {
-            Console.WriteLine(DateTime.Now.ToString("hh:mm:ss:fff") + ": " + value);
         }
     }
 }
